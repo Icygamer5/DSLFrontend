@@ -1,0 +1,57 @@
+/* Load first - no Tailwind, guaranteed to work */
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-color: #0f172a !important;
+}
+
+#root {
+  min-height: 100vh;
+  background-color: #0f172a !important;
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+.landing-page {
+  min-height: 100vh;
+  background-color: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.landing-center {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2.5rem;
+  text-align: center;
+}
+
+.landing-page .landing-logo {
+  height: 16rem;
+  max-height: 20rem;
+  width: auto;
+  object-fit: contain;
+  animation: float-slow 4s ease-in-out infinite;
+}
+
+.landing-page .landing-btn {
+  padding: 0.75rem 2rem;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #1e293b;
+  background: rgba(255,255,255,0.95);
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+}
