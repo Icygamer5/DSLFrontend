@@ -249,7 +249,7 @@ export default function CrisisDashboard({ data }) {
         {/* Main Map */}
         <main className="relative min-w-0 flex flex-col flex-1">
           <div className="shrink-0 rounded-b-lg bg-gradient-to-b from-slate-700/90 to-slate-800/95 px-4 py-2.5">
-            <h3 className="text-sm font-semibold text-white">Global Crisis Hotspots 2025</h3>
+            <h3 className="text-xl font-semibold text-white">Global Crisis Hotspots 2025</h3>
           </div>
           <div className="relative min-h-0 flex-1 bg-space-stars">
             <Map data={data} mapStyle="mapbox://styles/mapbox/dark-v11" projection="globe" />
