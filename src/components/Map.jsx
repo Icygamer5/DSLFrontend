@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import crisisCountries from '../data/crisisCountries2025.json';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN || '';
 if (MAPBOX_TOKEN) {
@@ -32,36 +33,32 @@ export default function Map({ data, mapStyle = 'mapbox://styles/mapbox/light-v11
         map.current.setPaintProperty('background', 'background-opacity', 0);
       }
 
-      // Use Mapbox's built-in high-resolution country boundaries
-      map.current.addSource('mapbox-countries', {
-        type: 'vector',
-        url: 'mapbox://mapbox.country-boundaries-v1',
+      // Crisis countries GeoJSON (merged from top_crises + world boundaries, severity_color in properties)
+      map.current.addSource('crisis-countries', {
+        type: 'geojson',
+        data: crisisCountries,
       });
 
-      // Fill layer: only Sudan (ISO 3166-1 alpha-3 = SDN)
+      // Fill by pre-calculated severity color
       map.current.addLayer({
-        id: 'country-highlight',
+        id: 'country-fill',
         type: 'fill',
-        source: 'mapbox-countries',
-        'source-layer': 'country_boundaries',
+        source: 'crisis-countries',
         paint: {
-          'fill-color': '#008CFF', // UN Blue
-          'fill-opacity': 0.6,
+          'fill-color': ['get', 'severity_color'],
+          'fill-opacity': 0.75,
         },
-        filter: ['==', ['get', 'iso_3166_1_alpha_3'], 'SDN'],
       });
 
-      // Outline layer so the border stands out
+      // Outline so borders stand out
       map.current.addLayer({
         id: 'country-outline',
         type: 'line',
-        source: 'mapbox-countries',
-        'source-layer': 'country_boundaries',
+        source: 'crisis-countries',
         paint: {
-          'line-color': '#0055aa',
-          'line-width': 2,
+          'line-color': '#374151',
+          'line-width': 1,
         },
-        filter: ['==', ['get', 'iso_3166_1_alpha_3'], 'SDN'],
       });
     });
 
