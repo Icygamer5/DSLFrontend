@@ -8,9 +8,11 @@ if (MAPBOX_TOKEN) {
   mapboxgl.accessToken = MAPBOX_TOKEN;
 }
 
-export default function Map({ data, mapStyle = 'mapbox://styles/mapbox/light-v11', projection = 'mercator' }) {
+export default function Map({ data, mapStyle = 'mapbox://styles/mapbox/light-v11', projection = 'mercator', onCountryClick }) {
   const mapContainer = useRef(null);
   const map = useRef(null);
+  const onCountryClickRef = useRef(onCountryClick);
+  onCountryClickRef.current = onCountryClick;
 
   useEffect(() => {
     if (!MAPBOX_TOKEN || !mapContainer.current) return;
@@ -58,6 +60,15 @@ export default function Map({ data, mapStyle = 'mapbox://styles/mapbox/light-v11
           'line-width': 1,
         },
       });
+
+      if (onCountryClickRef.current) {
+        map.current.on('click', 'country-fill', (e) => {
+          if (e.features && e.features[0] && e.features[0].properties) {
+            onCountryClickRef.current(e.features[0].properties);
+          }
+        });
+        map.current.getCanvas().style.cursor = 'pointer';
+      }
     });
 
     return () => {

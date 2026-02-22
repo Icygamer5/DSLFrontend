@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Map from './Map';
 import { Users, DollarSign, Wallet } from 'lucide-react';
 import top_crises_static from '../data/top_crises.json';
+import CountryDetailPanel from './CountryDetailPanel';
 
 const YEARS = [2023, 2024, 2025];
 const REGIONS = {
@@ -63,7 +64,9 @@ function getSummaryEachYear(data) {
 export default function CrisisDashboard({ data }) {
   const [selectedYear, setSelectedYear] = useState(2025);
   const [topCrisesData, setTopCrisesData] = useState(top_crises_static);
+  const [selectedCountry, setSelectedCountry] = useState(null);
 
+  // Live data from Databricks API for AI, charts, and drill-down (map keeps using static GeoJSON)
   useEffect(() => {
     fetch('/api/top_crises')
       .then((res) => (res.ok ? res.json() : Promise.reject(res)))
@@ -139,8 +142,8 @@ export default function CrisisDashboard({ data }) {
 
       {/* Sidebar + Main */}
       <div className="flex min-h-0 flex-1">
-        {/* Sidebar */}
-        <aside className="flex w-72 shrink-0 flex-col border-r border-slate-200 bg-white">
+        {/* Sidebar – scrolls if content is tall */}
+        <aside className="flex w-72 shrink-0 flex-col overflow-y-auto border-r border-slate-200 bg-white">
           <div className="border-b border-slate-100 px-4 py-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
               Top 5 Underfunded Locations
@@ -187,13 +190,23 @@ export default function CrisisDashboard({ data }) {
           </nav>
         </aside>
 
-        {/* Main Map */}
-        <main className="relative min-w-0 flex flex-col flex-1">
+        {/* Main Map + Charts – scrollable so you can scroll down for charts */}
+        <main className="relative flex min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden scroll-smooth">
           <div className="shrink-0 rounded-b-lg bg-gradient-to-b from-slate-700/90 to-slate-800/95 px-4 py-2.5">
-            <h3 className="text-sm font-semibold text-white">Global Crisis Hotspots</h3>
+            <h3 className="text-sm font-semibold text-white">Global Crisis Hotspots (click a country for details)</h3>
           </div>
           <div className="relative min-h-0 flex-1 bg-space-stars">
-            <Map data={data} mapStyle="mapbox://styles/mapbox/dark-v11" projection="globe" />
+            <Map
+              data={data}
+              mapStyle="mapbox://styles/mapbox/dark-v11"
+              projection="globe"
+              onCountryClick={setSelectedCountry}
+            />
+            <CountryDetailPanel
+              countryProps={selectedCountry}
+              liveData={topCrisesData}
+              onClose={() => setSelectedCountry(null)}
+            />
           </div>
         </main>
       </div>
