@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Map from './Map';
 import { Users, DollarSign, Wallet } from 'lucide-react';
 import top_crises_static from '../data/top_crises.json';
+import { plugin } from 'postcss';
 
 const YEARS = [2023, 2024, 2025];
 const REGIONS = {
@@ -18,11 +19,31 @@ const REGIONS = {
   'Philippines': 'Asia',
   'Zambia': 'Africa',
   'Ethiopia': 'Africa',
-  'Viet Nam': 'Asia',
+  'Vietnam': 'Asia',
   'Zimbabwe': 'Africa',
   'Malawi': 'Africa',
   // Add more countries and their regions as needed
 };
+
+function buildCrisisLookup(data) {
+  const result = {};
+
+  data.forEach((d) => {
+    const key = `${d.country}${d.year}`;
+
+    result[key] = {
+      people_in_need: d.people_in_need || 0,
+      people_targeted: d.people_targeted || 0,
+      requirements: d.requirements || 0,
+      funding: d.funding || 0,
+      plans: d.plans ? JSON.parse(d.plans) : [],
+    };
+  });
+
+  return result;
+}
+
+const queriedCrisisData = buildCrisisLookup(top_crises_static);
 
 function getTop5Underfunded(data) {
   const result = {};
@@ -75,10 +96,12 @@ export default function CrisisDashboard({ data }) {
   const currentCrises = topCrises[selectedYear] || [];
   const yearSummary = getSummaryEachYear(topCrisesData)[selectedYear];
   const SUMMARY_CARDS = [
-    { label: 'Total People in Need', value: `${yearSummary?.total_people_in_need?.toLocaleString() ?? 0}`, icon: Users },
-    { label: 'Total Funding Received', value: `$${(yearSummary?.total_funding ?? 0).toLocaleString()}`, icon: DollarSign },
-    { label: 'Average Funding Per Person', value: `$${(yearSummary?.average_funding_per_person ?? 0).toFixed(2)}`, icon: Wallet },
+    { label: 'Total People in Need (Global)', value: `${yearSummary?.total_people_in_need?.toLocaleString() ?? 0}`, icon: Users },
+    { label: 'Total Funding Received (Global)', value: `$${(yearSummary?.total_funding ?? 0).toLocaleString()}`, icon: DollarSign },
+    { label: 'Average Funding Per Person (Global)', value: `$${(yearSummary?.average_funding_per_person ?? 0).toFixed(2)}`, icon: Wallet },
   ];
+
+  const [selectedCrisis, setSelectedCrisis] = useState(null);
 
   return (
     <div className="flex h-screen flex-col bg-slate-100 text-slate-800">
@@ -151,8 +174,11 @@ export default function CrisisDashboard({ data }) {
               {[2023, 2024, 2025].map((year) => (
                 <button
                   key={year}
-                  onClick={() => setSelectedYear(year)}
-                  className={`rounded-md px-2 py-1 text-xs font-medium transition ${
+                  onClick={() => {
+                    setSelectedYear(year);
+                    setSelectedCrisis(null);
+                  }}
+                  className={`rounded-md px-4 py-2 text-s font-medium transition ${
                     selectedYear === year
                       ? 'bg-[#003d7a] text-white'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -165,32 +191,65 @@ export default function CrisisDashboard({ data }) {
           </div>
 
           <nav className="flex-1 overflow-y-auto p-3">
-            <ul className="space-y-1">
-              {currentCrises.map((crisis) => (
-                <li key={crisis.rank}>
-                  <div className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5 transition-colors hover:bg-slate-100/80">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#003d7a] text-xs font-medium text-white">
-                      {crisis.rank}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-slate-800">
-                        {crisis.name}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {crisis.region} · Gap {crisis.fundingGap}
-                      </p>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            {!selectedCrisis ? (
+              <ul className="space-y-1">
+                {currentCrises.map((crisis) => (
+                  <li key={crisis.rank}>
+                    <button
+                      onClick={() => setSelectedCrisis(crisis)}
+                      className="w-full text-left"
+                    >
+                      <div className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5 transition-colors hover:bg-slate-100/80">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#003d7a] text-xs font-medium text-white">
+                          {crisis.rank}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-l font-medium text-slate-800">
+                            {crisis.name}
+                          </p>
+                          <p className="text-s text-slate-500">
+                            {crisis.region} · Gap {crisis.fundingGap}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="space-y-4">
+                <button
+                  onClick={() => setSelectedCrisis(null)}
+                  className="text-xs font-medium text-blue-600 hover:underline"
+                >
+                  ← Back
+                </button>
+
+                <h3 className="text-lg font-bold text-slate-800">
+                  {selectedCrisis.name} ({selectedYear})
+                </h3>
+
+                <div className="space-y-2 text-medium text-slate-700">
+                  <p><strong>People in Need:</strong> {queriedCrisisData[selectedCrisis.name + selectedYear]?.people_in_need || 'N/A'}</p>
+                  <p><strong>People Targeted:</strong> {queriedCrisisData[selectedCrisis.name + selectedYear]?.people_targeted || 'N/A'}</p>
+                  <p><strong>Requirements:</strong> ${queriedCrisisData[selectedCrisis.name + selectedYear]?.requirements || 0}</p>
+                  <p><strong>Funding:</strong> ${queriedCrisisData[selectedCrisis.name + selectedYear]?.funding || 0}</p>
+                  <p><strong>Response Plans:</strong></p>
+                  <ul className="list-disc list-inside">
+                    {queriedCrisisData[selectedCrisis.name + selectedYear]?.plans?.map((plan, index) => (
+                      <li key={index}>{plan}</li>
+                    )) || <li>No plans available</li>}
+                  </ul>
+                </div>
+              </div>
+            )}
           </nav>
         </aside>
 
         {/* Main Map */}
         <main className="relative min-w-0 flex flex-col flex-1">
           <div className="shrink-0 rounded-b-lg bg-gradient-to-b from-slate-700/90 to-slate-800/95 px-4 py-2.5">
-            <h3 className="text-sm font-semibold text-white">Global Crisis Hotspots</h3>
+            <h3 className="text-sm font-semibold text-white">Global Crisis Hotspots 2025</h3>
           </div>
           <div className="relative min-h-0 flex-1 bg-space-stars">
             <Map data={data} mapStyle="mapbox://styles/mapbox/dark-v11" projection="globe" />
