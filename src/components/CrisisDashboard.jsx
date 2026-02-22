@@ -22,6 +22,13 @@ const REGIONS = {
   'Vietnam': 'Asia',
   'Zimbabwe': 'Africa',
   'Malawi': 'Africa',
+  'Cameroon': 'Africa',
+  'Chad': 'Africa',
+  'Mozambique': 'Africa',
+  'Haiti': 'Caribbean',
+  'Bangladesh': 'Asia',
+  'Grenada': 'Caribbean',
+  'Niger': 'Africa',
   // Add more countries and their regions as needed
 };
 
@@ -45,7 +52,7 @@ function buildCrisisLookup(data) {
 
 const queriedCrisisData = buildCrisisLookup(top_crises_static);
 
-function getTop5Underfunded(data) {
+function getTop10Underfunded(data) {
   const result = {};
 
   YEARS.forEach((year) => {
@@ -55,15 +62,15 @@ function getTop5Underfunded(data) {
     // sort ascending by coverage_ratio (lowest coverage first)
     yearData.sort((a, b) => a.coverage_ratio - b.coverage_ratio);
 
-    // take top 5
-    const top5 = yearData.slice(0, 5).map((d, i) => ({
+    // take top 10
+    const top10 = yearData.slice(0, 10).map((d, i) => ({
       rank: i + 1,
       name: d.country,
       region: REGIONS[d.country] || 'Unknown',
       fundingGap: `${((1 - d.coverage_ratio) * 100).toFixed(0)}%`, // 100*(1-coverage_ratio)
     }));
 
-    result[year] = top5;
+    result[year] = top10;
   });
 
   return result;
@@ -92,7 +99,7 @@ export default function CrisisDashboard({ data }) {
       .catch(() => {});
   }, []);
 
-  const topCrises = getTop5Underfunded(topCrisesData);
+  const topCrises = getTop10Underfunded(topCrisesData);
   const currentCrises = topCrises[selectedYear] || [];
   const yearSummary = getSummaryEachYear(topCrisesData)[selectedYear];
   const SUMMARY_CARDS = [
@@ -165,8 +172,8 @@ export default function CrisisDashboard({ data }) {
         {/* Sidebar */}
         <aside className="flex w-72 shrink-0 flex-col border-r border-slate-200 bg-white">
           <div className="border-b border-slate-100 px-4 py-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
-              Top 5 Underfunded Locations
+            <h2 className="text-m font-semibold uppercase tracking-wider text-slate-500">
+              Top 10 Underfunded Places
             </h2>
 
             {/* Year selector */}
@@ -207,7 +214,7 @@ export default function CrisisDashboard({ data }) {
                           <p className="truncate text-l font-medium text-slate-800">
                             {crisis.name}
                           </p>
-                          <p className="text-s text-slate-500">
+                          <p className="text-xs text-slate-500">
                             {crisis.region} · Gap {crisis.fundingGap}
                           </p>
                         </div>
@@ -249,7 +256,7 @@ export default function CrisisDashboard({ data }) {
         {/* Main Map */}
         <main className="relative min-w-0 flex flex-col flex-1">
           <div className="shrink-0 rounded-b-lg bg-gradient-to-b from-slate-700/90 to-slate-800/95 px-4 py-2.5">
-            <h3 className="text-xl font-semibold text-white">Global Crisis Hotspots 2025</h3>
+            <h3 className="text-xl font-semibold text-white">Global Crisis Hotspots 2025 (Latest!)</h3>
           </div>
           <div className="relative min-h-0 flex-1 bg-space-stars">
             <Map data={data} mapStyle="mapbox://styles/mapbox/dark-v11" projection="globe" />
