@@ -26,6 +26,13 @@ const REGIONS = {
   'Vietnam': 'Asia',
   'Zimbabwe': 'Africa',
   'Malawi': 'Africa',
+  'Cameroon': 'Africa',
+  'Chad': 'Africa',
+  'Mozambique': 'Africa',
+  'Haiti': 'Caribbean',
+  'Bangladesh': 'Asia',
+  'Grenada': 'Caribbean',
+  'Niger': 'Africa',
   // Add more countries and their regions as needed
 };
 
@@ -68,7 +75,7 @@ function buildCrisisLookup(data) {
 
 const queriedCrisisData = buildCrisisLookup(top_crises_static);
 
-function getTop5Underfunded(data) {
+function getTop10Underfunded(data) {
   const result = {};
 
   YEARS.forEach((year) => {
@@ -127,7 +134,7 @@ export default function CrisisDashboard({ data }) {
       .catch(() => {});
   }, []);
 
-  const topCrises = getTop5Underfunded(topCrisesData);
+  const topCrises = getTop10Underfunded(topCrisesData);
   const currentCrises = topCrises[selectedYear] || [];
   const yearSummary = getSummaryEachYear(topCrisesData)[selectedYear];
 
@@ -211,8 +218,8 @@ export default function CrisisDashboard({ data }) {
         {/* Sidebar */}
         <aside className="flex w-72 shrink-0 flex-col border-r border-slate-200 bg-white">
           <div className="border-b border-slate-100 px-4 py-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
-              Top 5 Underfunded Locations
+            <h2 className="text-m font-semibold uppercase tracking-wider text-slate-500">
+              Top 10 Underfunded Places
             </h2>
 
             {/* Year selector */}
@@ -253,7 +260,7 @@ export default function CrisisDashboard({ data }) {
                           <p className="truncate text-l font-medium text-slate-800">
                             {crisis.name}
                           </p>
-                          <p className="text-s text-slate-500">
+                          <p className="text-xs text-slate-500">
                             {crisis.region} · Gap {crisis.fundingGap}
                           </p>
                         </div>
@@ -276,10 +283,10 @@ export default function CrisisDashboard({ data }) {
                 </h3>
 
                 <div className="space-y-2 text-medium text-slate-700">
-                  <p><strong>People in Need:</strong> {queriedCrisisData[selectedCrisis.name + selectedYear]?.people_in_need || 'N/A'}</p>
-                  <p><strong>People Targeted:</strong> {queriedCrisisData[selectedCrisis.name + selectedYear]?.people_targeted || 'N/A'}</p>
-                  <p><strong>Requirements:</strong> ${queriedCrisisData[selectedCrisis.name + selectedYear]?.requirements || 0}</p>
-                  <p><strong>Funding:</strong> ${queriedCrisisData[selectedCrisis.name + selectedYear]?.funding || 0}</p>
+                  <p><strong>People in Need:</strong> {(queriedCrisisData[selectedCrisis.name + selectedYear]?.people_in_need || 'N/A').toLocaleString()}</p>
+                  <p><strong>People Targeted:</strong> {(queriedCrisisData[selectedCrisis.name + selectedYear]?.people_targeted || 'N/A').toLocaleString()}</p>
+                  <p><strong>Requirements:</strong> ${(queriedCrisisData[selectedCrisis.name + selectedYear]?.requirements || 'N/A').toLocaleString()}</p>
+                  <p><strong>Funding:</strong> ${(queriedCrisisData[selectedCrisis.name + selectedYear]?.funding || 'N/A').toLocaleString()}</p>
                   <p><strong>Response Plans:</strong></p>
                   <ul className="list-disc list-inside">
                     {queriedCrisisData[selectedCrisis.name + selectedYear]?.plans?.map((plan, index) => (
