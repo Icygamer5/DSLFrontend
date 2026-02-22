@@ -98,6 +98,134 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, databricks: !!(PAT && HOST && WAREHOUSE_ID) });
 });
 
+// --- Decision Intelligence (Mary's UN requirements) ---
+function normRow(row) {
+  if (!row || typeof row !== 'object') return {};
+  const o = {};
+  for (const k of Object.keys(row)) o[k.toLowerCase()] = row[k];
+  return o;
+}
+
+app.get('/api/mismatch', async (req, res) => {
+  dotenv.config({ path: path.join(__dirname, '..', '.env') });
+  if (!PAT || !HOST || !WAREHOUSE_ID) {
+    return res.status(500).json({ error: 'Missing Databricks env' });
+  }
+  try {
+    const table = getTableName();
+    const rows = await executeSql(
+      `SELECT country, country_iso3, year, people_in_need, people_targeted, funding, requirements, coverage_ratio FROM ${table} WHERE coverage_ratio IS NOT NULL AND people_in_need > 0`
+    );
+    const pinMax = Math.max(...rows.map((r) => Number(normRow(r).people_in_need) || 0), 1);
+    const points = rows.map((r) => {
+      const n = normRow(r);
+      const coverage = Number(n.coverage_ratio) || 0;
+      const fundingPct = Math.round(coverage * 100);
+      const pin = Number(n.people_in_need) || 0;
+      const severityProxy = Math.min(5, 0.5 + (1 - coverage) * 3 + (pin / pinMax) * 1.5);
+      const isRed = severityProxy >= 4 && fundingPct < 25;
+      return {
+        country: n.country ?? n.country_name ?? n.country_iso3 ?? 'Unknown',
+        country_iso3: n.country_iso3,
+        year: n.year,
+        severity: Math.round(severityProxy * 10) / 10,
+        funding_pct: fundingPct,
+        people_in_need: pin,
+        is_red: isRed,
+      };
+    });
+    res.json({ points });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message, points: [] });
+  }
+});
+
+app.get('/api/decision-metrics', async (req, res) => {
+  dotenv.config({ path: path.join(__dirname, '..', '.env') });
+  if (!PAT || !HOST || !WAREHOUSE_ID) {
+    return res.status(500).json({ error: 'Missing Databricks env' });
+  }
+  try {
+    const table = getTableName();
+    const rows = await executeSql(`SELECT country, year, people_in_need, people_targeted, funding, requirements, coverage_ratio FROM ${table}`);
+    let structuralGap = 0;
+    let severityGapSum = 0;
+    let count = 0;
+    const fundingByYear = {};
+    rows.forEach((r) => {
+      const n = normRow(r);
+      const pin = Number(n.people_in_need) || 0;
+      const targeted = Number(n.people_targeted) || 0;
+      structuralGap += Math.max(0, pin - targeted);
+      const cov = Number(n.coverage_ratio);
+      if (cov != null && cov > 0) {
+        severityGapSum += 1 / cov;
+        count++;
+      }
+      const y = n.year;
+      if (y != null) {
+        fundingByYear[y] = (fundingByYear[y] || 0) + (Number(n.funding) || 0);
+      }
+    });
+    const severityGap = count > 0 ? (severityGapSum / count).toFixed(2) : null;
+    const years = Object.keys(fundingByYear).map(Number).sort((a, b) => b - a);
+    let fundingVelocity = null;
+    if (years.length >= 2) {
+      const latest = fundingByYear[years[0]];
+      const prev = fundingByYear[years[1]];
+      if (prev > 0) {
+        const pct = ((latest - prev) / prev) * 100;
+        fundingVelocity = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '% YoY';
+      }
+    }
+    res.json({
+      severity_gap: severityGap,
+      structural_gap: structuralGap,
+      funding_velocity: fundingVelocity,
+      structural_gap_formatted: structuralGap >= 1e6 ? `${(structuralGap / 1e6).toFixed(1)}M` : structuralGap.toLocaleString(),
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/crisis-alert', async (req, res) => {
+  const format = (req.query.format || 'markdown').toLowerCase();
+  const top = Math.min(Math.max(parseInt(req.query.top, 10) || 3, 1), 20);
+  dotenv.config({ path: path.join(__dirname, '..', '.env') });
+  if (!PAT || !HOST || !WAREHOUSE_ID) {
+    return res.status(500).send(format === 'csv' ? 'country,year,people_in_need,funding_gap,coverage_pct\n' : '# Crisis Alert\n\nNo data.\n');
+  }
+  try {
+    const table = getTableName();
+    const rows = await executeSql(
+      `SELECT country, country_iso3, year, people_in_need, funding, requirements, coverage_ratio FROM ${table} WHERE coverage_ratio IS NOT NULL ORDER BY coverage_ratio ASC LIMIT ${top}`
+    );
+    const lines = rows.map((r) => {
+      const n = normRow(r);
+      const gap = Math.max(0, Number(n.requirements) - Number(n.funding));
+      const pct = Math.round((Number(n.coverage_ratio) || 0) * 100);
+      return { country: n.country ?? n.country_iso3, year: n.year, people_in_need: Number(n.people_in_need) || 0, funding_gap: gap, coverage_pct: pct };
+    });
+    if (format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=crisis-alert.csv');
+      const header = 'country,year,people_in_need,funding_gap,coverage_pct\n';
+      const body = lines.map((l) => `${l.country},${l.year},${l.people_in_need},${l.funding_gap},${l.coverage_pct}`).join('\n');
+      return res.send(header + body);
+    }
+    const md = `# Crisis Alert — Top ${top} Underfunded Emergencies\n\n| Country | Year | People in need | Funding gap | Coverage % |\n|--------|------|----------------|-------------|------------|\n${lines.map((l) => `| ${l.country} | ${l.year} | ${l.people_in_need.toLocaleString()} | $${(l.funding_gap / 1e6).toFixed(1)}M | ${l.coverage_pct}% |`).join('\n')}\n\n*Generated for low-bandwidth environments. File size kept minimal.*\n`;
+    res.setHeader('Content-Type', 'text/markdown');
+    res.setHeader('Content-Disposition', 'attachment; filename=crisis-alert.md');
+    res.send(md);
+  } catch (e) {
+    console.error(e);
+    res.status(500).send(format === 'csv' ? 'error\n' : '# Crisis Alert\n\nError loading data.\n');
+  }
+});
+
 // System context for Sphinx: table schema so we map columns correctly
 const SPHINX_SYSTEM_PROMPT = `You are the Sphinx AI Agent. You have access to a table called 'gold_crisis_impact'.
 The columns are: country (name), country_iso3 (3-letter code), funding_gap (money still needed),
@@ -244,6 +372,21 @@ app.post('/api/chat', async (req, res) => {
 
 // Genie: proxy so frontend can ask Genie (uses funding_gap, total_people_in_need from your space)
 const GENIE_SPACE_ID = process.env.GENIE_SPACE_ID || '';
+
+app.get('/api/genie/status', (req, res) => {
+  dotenv.config({ path: path.join(__dirname, '..', '.env') });
+  const spaceId = process.env.GENIE_SPACE_ID || '';
+  const hasPat = !!(process.env.DATABRICKS_PAT || '').trim();
+  const hasHost = !!(process.env.DATABRICKS_SERVER_HOSTNAME || '').trim();
+  const configured = !!(spaceId && hasPat && hasHost);
+  res.json({
+    configured,
+    message: configured
+      ? 'Genie is configured. Ask a question to run it.'
+      : 'Missing in .env: GENIE_SPACE_ID, DATABRICKS_PAT, or DATABRICKS_SERVER_HOSTNAME. Restart the API server after editing .env.',
+  });
+});
+
 async function genieFetch(path, opts = {}) {
   const url = `https://${HOST}${path}`;
   const res = await fetch(url, {
@@ -301,10 +444,45 @@ app.post('/api/genie/ask', async (req, res) => {
       return res.status(500).json({ error: result.error.message || result.error, result });
     }
 
-    // Data delivery: Genie returns query results in a separate endpoint. Fetch so the frontend gets data_array.
-    const msgId = result.message_id || result.id;
-    const attachments = result.attachments || [];
-    for (const att of attachments) {
+    if (process.env.DEBUG_GENIE === '1') {
+      const safe = { ...result, content: result.content ? '[present]' : undefined };
+      if (result.query_result) safe.query_result_keys = Object.keys(result.query_result);
+      if (result.attachments?.length) safe.attachment_ids = result.attachments.map((a) => a.attachment_id ?? a.id);
+      console.log('Genie result keys:', Object.keys(result));
+      console.log('Genie debug:', JSON.stringify(safe, null, 2).slice(0, 2000));
+    }
+
+    // Data delivery: use top-level query_result first (message response often includes it)
+    const queryResult = result.query_result;
+    let dataArray = null;
+    let manifest = {};
+    if (queryResult) {
+      const stmt = queryResult.statement_response || queryResult;
+      const res = stmt.result || queryResult.result || {};
+      dataArray = res.data_array || queryResult.data_array;
+      manifest = stmt.manifest || queryResult.manifest || {};
+    }
+    if (dataArray && Array.isArray(dataArray) && dataArray.length > 0) {
+      const schema = manifest.schema || {};
+      const columns = schema.columns || [];
+      const columnNames = columns.map((c) => (typeof c === 'object' && c && c.name != null ? c.name : c)).filter(Boolean);
+      if (columnNames.length) {
+        result.data_array = dataArray.map((row) => {
+          const obj = {};
+          columnNames.forEach((col, idx) => { obj[col] = row[idx]; });
+          return obj;
+        });
+      } else {
+        result.data_array = dataArray;
+      }
+      if (process.env.NODE_ENV !== 'production') console.log('Genie: used query_result, rows:', result.data_array.length);
+    }
+
+    // Else try attachment query-result endpoint
+    if (!result.data_array || result.data_array.length === 0) {
+      const msgId = result.message_id || result.id;
+      const attachments = result.attachments || [];
+      for (const att of attachments) {
       const attId = att.attachment_id ?? att.id;
       if (!attId) continue;
       try {
@@ -331,6 +509,7 @@ app.post('/api/genie/ask', async (req, res) => {
       } catch (err) {
         if (process.env.NODE_ENV !== 'production') console.warn('Genie attachment query-result:', err.message);
       }
+      }
     }
 
     res.json(result);
@@ -347,7 +526,7 @@ const helpHtml = `
   <h1>Databricks API server</h1>
   <p>This port is for the <strong>API only</strong>. Open the dashboard here:</p>
   <p><a href="http://localhost:5173">http://localhost:5173</a> &nbsp; (or <a href="http://localhost:5174">5174</a> if 5173 is in use)</p>
-  <p>API: <code>GET /api/health</code> &nbsp; <code>GET /api/top_crises</code> &nbsp; <code>POST /api/genie/ask</code></p>
+  <p>API: <code>GET /api/health</code> &nbsp; <code>GET /api/top_crises</code> &nbsp; <code>GET /api/mismatch</code> &nbsp; <code>GET /api/decision-metrics</code> &nbsp; <code>GET /api/crisis-alert</code> &nbsp; <code>POST /api/genie/ask</code></p>
 </body></html>`;
 
 // Catch-all: any other path shows the same message (no more "Cannot GET")

@@ -25,14 +25,38 @@ function normalizeRowKeys(row) {
   return r;
 }
 
-// Collect data_array from Genie response (backend may put it on result or in attachments/query-result)
+// Collect data_array from Genie response (backend may put it on result, or we read query_result / attachments)
 function extractDataArray(result) {
   if (!result) return [];
   if (Array.isArray(result.data_array) && result.data_array.length > 0) return result.data_array;
   const attachments = result.attachments || [];
-  const first = attachments[0];
-  if (first && Array.isArray(first.data_array) && first.data_array.length > 0) return first.data_array;
-  if (first && Array.isArray(first.data)) return first.data;
+  for (const att of attachments) {
+    if (Array.isArray(att.data_array) && att.data_array.length > 0) return att.data_array;
+    if (Array.isArray(att.data) && att.data.length > 0) return att.data;
+    const aqr = att.query_result || att.query_result_metadata;
+    if (aqr && aqr.result && Array.isArray(aqr.result.data_array) && aqr.result.data_array.length > 0) {
+      const arr = aqr.result.data_array;
+      const schema = (aqr.manifest || aqr).schema || {};
+      const cols = (schema.columns || []).map((c) => (typeof c === 'object' && c && c.name != null ? c.name : c)).filter(Boolean);
+      if (cols.length) return arr.map((row) => { const o = {}; cols.forEach((n, i) => { o[n] = row[i]; }); return o; });
+      return arr;
+    }
+  }
+  // Message response often includes query_result (deprecated but still present)
+  const qr = result.query_result;
+  if (qr) {
+    const stmt = qr.statement_response || qr;
+    const res = stmt.result || qr.result || {};
+    const dataArray = res.data_array || qr.data_array;
+    if (Array.isArray(dataArray) && dataArray.length > 0) {
+      const manifest = stmt.manifest || qr.manifest || {};
+      const schema = manifest.schema || {};
+      const columns = schema.columns || [];
+      const names = columns.map((c) => (typeof c === 'object' && c && c.name != null ? c.name : c)).filter(Boolean);
+      if (names.length) return dataArray.map((row) => { const o = {}; names.forEach((n, i) => { o[n] = row[i]; }); return o; });
+      return dataArray;
+    }
+  }
   const stmt = result.statement_response || result;
   const resResult = stmt.result || {};
   const dataArray = resResult.data_array || [];
@@ -72,7 +96,7 @@ function getDataAndType(result) {
     } else {
       const keys = Object.keys(data[0]);
       if (keys.length >= 2 && !data[0].name && !data[0].value) {
-        data = data.map((row) => ({ name: String(row[keys[0]]), value: Number(row[keys[1]]) ?? 0 }));
+        data = data.map((row) => ({ name: String(row[keys[0]]), value: Number(row[keys[1]]) || 0 }));
       }
     }
   }

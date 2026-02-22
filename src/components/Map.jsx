@@ -8,11 +8,41 @@ if (MAPBOX_TOKEN) {
   mapboxgl.accessToken = MAPBOX_TOKEN;
 }
 
-export default function Map({ data, mapStyle = 'mapbox://styles/mapbox/light-v11', projection = 'mercator', onCountryClick }) {
+export default function Map({ mapStyle = 'mapbox://styles/mapbox/light-v11', projection = 'mercator', onCountryClick, selectedCountry }) {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const onCountryClickRef = useRef(onCountryClick);
-  onCountryClickRef.current = onCountryClick;
+
+  useEffect(() => {
+    onCountryClickRef.current = onCountryClick;
+  }, [onCountryClick]);
+
+  const selectedIso = selectedCountry?.country_iso3 || selectedCountry?.ISO_A3 || selectedCountry?.ADM0_A3 || null;
+
+  // Change projection at runtime when prop changes
+  useEffect(() => {
+    if (!map.current || typeof map.current.setProjection !== 'function') return;
+    const proj = projection === 'globe' ? 'globe' : 'mercator';
+    map.current.setProjection(proj);
+  }, [projection]);
+
+  // Pop-out highlight for selected country: brighter fill, thicker outline
+  useEffect(() => {
+    if (!map.current || !map.current.getLayer('country-fill')) return;
+    const isoLiteral = selectedIso ? ['literal', selectedIso] : null;
+    if (selectedIso && isoLiteral) {
+      const isSelected = ['any', ['==', ['get', 'country_iso3'], isoLiteral], ['==', ['get', 'ISO_A3'], isoLiteral], ['==', ['get', 'ADM0_A3'], isoLiteral]];
+      map.current.setPaintProperty('country-fill', 'fill-opacity', ['case', isSelected, 1, 0.75]);
+      map.current.setPaintProperty('country-fill', 'fill-color', ['case', isSelected, '#fbbf24', ['get', 'severity_color']]);
+      map.current.setPaintProperty('country-outline', 'line-width', ['case', isSelected, 4, 1]);
+      map.current.setPaintProperty('country-outline', 'line-color', ['case', isSelected, '#f59e0b', '#374151']);
+    } else {
+      map.current.setPaintProperty('country-fill', 'fill-opacity', 0.75);
+      map.current.setPaintProperty('country-fill', 'fill-color', ['get', 'severity_color']);
+      map.current.setPaintProperty('country-outline', 'line-width', 1);
+      map.current.setPaintProperty('country-outline', 'line-color', '#374151');
+    }
+  }, [selectedIso]);
 
   useEffect(() => {
     if (!MAPBOX_TOKEN || !mapContainer.current) return;
@@ -77,6 +107,7 @@ export default function Map({ data, mapStyle = 'mapbox://styles/mapbox/light-v11
         map.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- map init once; projection/style updated in other effects
   }, []);
 
   if (!MAPBOX_TOKEN) {

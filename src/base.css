@@ -16,14 +16,54 @@ html, body {
   50% { transform: translateY(-12px); }
 }
 
+@keyframes float-up-down {
+  0%, 100% { transform: translate(var(--landing-tx), var(--landing-ty)); }
+  50% { transform: translate(var(--landing-tx), calc(var(--landing-ty) - 14px)); }
+}
+
 .landing-page {
   min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
   background-color: #0f172a;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   position: relative;
   overflow: hidden;
+  padding: 0.5rem 1rem 1rem;
+  box-sizing: border-box;
+}
+
+.landing-headline {
+  position: relative;
+  z-index: 12;
+  text-align: center;
+  margin: 0;
+  padding: 0 1rem;
+  max-width: 42rem;
+  flex-shrink: 0;
+}
+
+.landing-title {
+  margin: 0;
+  font-family: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  text-shadow: 0 2px 20px rgba(0,0,0,0.3);
+}
+
+.landing-subtitle {
+  margin: 0.35rem 0 0;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: clamp(0.95rem, 2.5vw, 1.2rem);
+  font-weight: 500;
+  color: rgba(255,255,255,0.9);
+  line-height: 1.35;
 }
 
 .landing-center {
@@ -32,19 +72,66 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2.5rem;
+  justify-content: center;
+  gap: 1rem;
   text-align: center;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.landing-logo-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 27rem;
+  height: 27rem;
+  flex-shrink: 0;
+}
+
+.landing-orbit-wrap {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+.landing-float-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 5rem;
+  height: 5rem;
+  margin-left: -2.5rem;
+  margin-top: -2.5rem;
+  animation: float-up-down 2.8s ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+  transform: translate(var(--landing-tx), var(--landing-ty));
+}
+
+.landing-float-img-inner {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0.5rem;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.35);
 }
 
 .landing-page .landing-logo {
-  height: 16rem;
-  max-height: 20rem;
+  height: min(18rem, 28vh);
+  max-height: 22rem;
   width: auto;
   object-fit: contain;
   animation: float-slow 4s ease-in-out infinite;
+  position: relative;
+  z-index: 2;
 }
 
 .landing-page .landing-btn {
+  margin-top: 0.5rem;
   padding: 0.75rem 2rem;
   font-size: 1rem;
   font-weight: 500;
@@ -54,4 +141,7 @@ html, body {
   border-radius: 0.5rem;
   cursor: pointer;
   box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+  position: relative;
+  z-index: 12;
+  flex-shrink: 0;
 }

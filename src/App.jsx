@@ -1,5 +1,5 @@
 import LandingPage from './components/LandingPage'
-import SentinelChat from "./components/SentinelChat";
+import SentinelChat from './components/SentinelChat'
 
 function App() {
   return (

@@ -28,7 +28,7 @@ export default function SentinelChat() {
         ...prev,
         { role: "assistant", content: data.response },
       ]);
-    } catch (error) {
+    } catch {
       setChat((prev) => [
         ...prev,
         { role: "assistant", content: "Error contacting Sentinel." },

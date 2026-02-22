@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
 import Map from './Map';
 import GenieAsk from './GenieAsk';
 import CountryDetailPanel from './CountryDetailPanel';
-import { Users, DollarSign, Wallet, MapPin, BarChart3, Sparkles, X } from 'lucide-react';
+import DecisionIntelligence from './DecisionIntelligence';
+import { Users, DollarSign, Wallet, MapPin, BarChart3, Target, Sparkles, X } from 'lucide-react';
 import top_crises_static from '../data/top_crises.json';
 
 const LAKEVIEW_EMBED_URL = 'https://dbc-20724627-a496.cloud.databricks.com/embed/dashboardsv3/01f10fd0a0b913319891b8f689a258d2?o=7474655950071744';
@@ -128,16 +130,24 @@ export default function CrisisDashboard({ data }) {
   const topCrises = getTop5Underfunded(topCrisesData);
   const currentCrises = topCrises[selectedYear] || [];
   const yearSummary = getSummaryEachYear(topCrisesData)[selectedYear];
+
+  const animPeople = useAnimatedNumber(yearSummary?.total_people_in_need ?? 0, 1200);
+  const animFunding = useAnimatedNumber(yearSummary?.total_funding ?? 0, 1400);
+  const animAvg = useAnimatedNumber(yearSummary?.average_funding_per_person ?? 0, 1000);
+
   const SUMMARY_CARDS = [
-    { label: 'Total People in Need (Global)', value: `${yearSummary?.total_people_in_need?.toLocaleString() ?? 0}`, icon: Users },
-    { label: 'Total Funding Received (Global)', value: `$${(yearSummary?.total_funding ?? 0).toLocaleString()}`, icon: DollarSign },
-    { label: 'Average Funding Per Person (Global)', value: `$${(yearSummary?.average_funding_per_person ?? 0).toFixed(2)}`, icon: Wallet },
+    { label: 'Total People in Need (Global)', value: Math.round(animPeople).toLocaleString(), icon: Users },
+    { label: 'Total Funding Received (Global)', value: `$${Math.round(animFunding).toLocaleString()}`, icon: DollarSign },
+    { label: 'Average Funding Per Person (Global)', value: `$${animAvg.toFixed(2)}`, icon: Wallet },
   ];
 
   const [selectedCrisis, setSelectedCrisis] = useState(null);
   const [selectedMapCountry, setSelectedMapCountry] = useState(null);
-  const [mainView, setMainView] = useState('map'); // 'map' | 'charts'
+  const [mapProjection, setMapProjection] = useState('globe'); // 'globe' = 3D, 'mercator' = 2D
+  const [mainView, setMainView] = useState('map'); // 'map' | 'charts' | 'decision'
   const [geniePopupOpen, setGeniePopupOpen] = useState(false);
+  const [genieInitialPrompt, setGenieInitialPrompt] = useState('');
+  const GENIE_CRISIS_ALERT_PROMPT = 'Generate a Crisis Alert summary for the top 3 underfunded emergencies.';
 
   return (
     <div className="flex h-screen flex-col bg-slate-100 text-slate-800">
@@ -174,7 +184,7 @@ export default function CrisisDashboard({ data }) {
         </div>
         </div>
 
-        {/* Summary Cards */}
+        {/* Summary Cards — numbers count up on load / year change */}
         <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
           {SUMMARY_CARDS.map((card) => {
             const Icon = card.icon;
@@ -188,7 +198,7 @@ export default function CrisisDashboard({ data }) {
                 </div>
                 <div className="min-w-0 flex-1 border-t border-slate-100 pt-3">
                   <p className="text-sm font-medium text-slate-500">{card.label}</p>
-                  <p className="mt-0.5 text-xl font-bold text-slate-800">{card.value}</p>
+                  <p className="mt-0.5 text-xl font-bold text-slate-800 tabular-nums">{card.value}</p>
                 </div>
               </div>
             );
@@ -287,7 +297,9 @@ export default function CrisisDashboard({ data }) {
           <div className="shrink-0 rounded-b-lg bg-gradient-to-b from-slate-700/90 to-slate-800/95 px-4 py-2.5">
             <div className="flex items-center justify-between gap-4">
               <h3 className="text-sm font-semibold text-white">
-                {mainView === 'map' ? 'Global Crisis Hotspots 2025 — click a country for details' : 'Crisis dashboard charts'}
+                {mainView === 'map' && 'Global Crisis Hotspots 2025 — click a country for details'}
+                {mainView === 'charts' && 'Crisis dashboard charts'}
+                {mainView === 'decision' && 'Decision Intelligence — mismatch & crisis alert'}
               </h3>
               <div className="flex rounded-md bg-white/10 p-0.5">
                 <button
@@ -306,32 +318,50 @@ export default function CrisisDashboard({ data }) {
                   <BarChart3 className="h-3.5 w-3.5" />
                   Charts
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setMainView('decision')}
+                  className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium transition ${mainView === 'decision' ? 'bg-white/20 text-white' : 'text-white/80 hover:text-white'}`}
+                >
+                  <Target className="h-3.5 w-3.5" />
+                  Decision
+                </button>
               </div>
             </div>
           </div>
           {mainView === 'map' && (
             <>
               <div className="relative min-h-0 flex-1 bg-space-stars">
+                <div className="absolute top-4 right-4 z-10 flex rounded-lg border border-white/20 bg-slate-900/80 p-1 shadow-lg backdrop-blur-sm">
+                  <button
+                    type="button"
+                    onClick={() => setMapProjection('mercator')}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${mapProjection === 'mercator' ? 'bg-white/20 text-white' : 'text-white/80 hover:text-white'}`}
+                    title="2D map"
+                  >
+                    2D
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMapProjection('globe')}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${mapProjection === 'globe' ? 'bg-white/20 text-white' : 'text-white/80 hover:text-white'}`}
+                    title="3D globe"
+                  >
+                    3D
+                  </button>
+                </div>
                 <Map
                   data={data}
                   mapStyle="mapbox://styles/mapbox/dark-v11"
-                  projection="globe"
+                  projection={mapProjection}
                   onCountryClick={setSelectedMapCountry}
+                  selectedCountry={selectedMapCountry}
                 />
                 <CountryDetailPanel
                   countryProps={selectedMapCountry}
                   liveData={topCrisesData}
                   onClose={() => setSelectedMapCountry(null)}
                 />
-                {/* Single Ask Genie button: opens pop-up on the site (no Databricks) */}
-                <button
-                  type="button"
-                  onClick={() => setGeniePopupOpen(true)}
-                  className="absolute bottom-6 right-6 z-10 flex items-center gap-2 rounded-xl border-2 border-violet-400/60 bg-gradient-to-br from-indigo-200 via-pink-200 to-orange-300 px-4 py-3 text-sm font-semibold text-slate-800 shadow-lg transition hover:scale-105 hover:shadow-xl"
-                >
-                  <Sparkles className="h-5 w-5 text-pink-500" />
-                  Ask Genie
-                </button>
               </div>
             </>
           )}
@@ -343,9 +373,38 @@ export default function CrisisDashboard({ data }) {
                 className="h-full w-full border-0"
                 style={{ minHeight: 600 }}
               />
+              {/* Ask Genie in upper right (we can't move the iframe's button) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setGenieInitialPrompt('');
+                  setGeniePopupOpen(true);
+                }}
+                className="absolute top-6 right-6 z-10 flex items-center gap-2 rounded-xl border-2 border-violet-400/60 bg-gradient-to-br from-indigo-200 via-pink-200 to-orange-300 px-4 py-3 text-sm font-semibold text-slate-800 shadow-lg transition hover:scale-105 hover:shadow-xl"
+              >
+                <Sparkles className="h-5 w-5 text-pink-500" />
+                Ask Genie
+              </button>
             </div>
           )}
-          {/* Pop-up only on Map: in-app Genie, no Databricks */}
+          {mainView === 'decision' && (
+            <div className="relative min-h-0 flex-1 bg-slate-50">
+              <DecisionIntelligence />
+              {/* Ask Genie on Decision tab — pre-fill with Crisis Alert suggested question */}
+              <button
+                type="button"
+                onClick={() => {
+                  setGenieInitialPrompt(GENIE_CRISIS_ALERT_PROMPT);
+                  setGeniePopupOpen(true);
+                }}
+                className="absolute top-6 right-6 z-10 flex items-center gap-2 rounded-xl border-2 border-violet-400/60 bg-gradient-to-br from-indigo-200 via-pink-200 to-orange-300 px-4 py-3 text-sm font-semibold text-slate-800 shadow-lg transition hover:scale-105 hover:shadow-xl"
+              >
+                <Sparkles className="h-5 w-5 text-pink-500" />
+                Ask Genie
+              </button>
+            </div>
+          )}
+          {/* Genie pop-up (Map / Charts / Decision) */}
           {geniePopupOpen && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/30 p-4">
               <div className="relative w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-2xl">
@@ -361,7 +420,7 @@ export default function CrisisDashboard({ data }) {
                   </button>
                 </div>
                 <div className="max-h-[70vh] overflow-y-auto p-4">
-                  <GenieAsk />
+                  <GenieAsk initialPrompt={genieInitialPrompt} />
                 </div>
               </div>
             </div>
