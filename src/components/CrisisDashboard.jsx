@@ -18,7 +18,7 @@ const REGIONS = {
   'Philippines': 'Asia',
   'Zambia': 'Africa',
   'Ethiopia': 'Africa',
-  'Viet Nam': 'Asia',
+  'Vietnam': 'Asia',
   'Zimbabwe': 'Africa',
   'Malawi': 'Africa',
   // Add more countries and their regions as needed
@@ -51,16 +51,39 @@ function getTop5Underfunded(data) {
 // This will be used directly in your CrisisDashboard component
 const TOP_CRISES = getTop5Underfunded(top_crises);
 
-// Summary cards
-const SUMMARY_CARDS = [
-  { label: 'Total People in Need', value: '75,400,000', icon: Users },
-  { label: 'Total Funding Received', value: '$2,350,000,000', icon: DollarSign },
-  { label: 'Average Funding Per Person', value: '$31.20', icon: Wallet },
-];
+function getSummaryEachYear(data, country_iso3) {
+  const result = {};
+
+  YEARS.forEach((year) => {
+    // filter for the year
+    const yearData = data.filter((d) => d.year === year);
+
+    // take top 5
+    const total_people_in_need = yearData.reduce((sum, d) => sum + d.people_in_need, 0);
+    const total_funding = yearData.reduce((sum, d) => sum + (d.funding || 0), 0);
+    const average_funding_per_person = total_funding / total_people_in_need;
+
+    result[year] = {
+      total_people_in_need,
+      total_funding,
+      average_funding_per_person
+    };
+  });
+
+  return result;
+}
+
+const SUMMARY_DATA = getSummaryEachYear(top_crises);
 
 export default function CrisisDashboard({ data }) {
-  const [selectedYear, setSelectedYear] = useState(2023);
+  const [selectedYear, setSelectedYear] = useState(2025);
   const currentCrises = TOP_CRISES[selectedYear];
+  const yearSummary = SUMMARY_DATA[selectedYear];
+  const SUMMARY_CARDS = [
+    { label: 'Total People in Need', value: `${yearSummary?.total_people_in_need?.toLocaleString() || 0}`, icon: Users },
+    { label: 'Total Funding Received', value: `$${(yearSummary?.total_funding).toLocaleString()}`, icon: DollarSign },
+    { label: 'Average Funding Per Person', value: `$${(yearSummary?.average_funding_per_person).toFixed(2)}`, icon: Wallet },
+  ];
 
   return (
     <div className="flex h-screen flex-col bg-slate-100 text-slate-800">
@@ -80,6 +103,21 @@ export default function CrisisDashboard({ data }) {
               Identifying the Most Underfunded Crises
             </p>
           </div>
+          <div className="mt-2 flex justify-end gap-2">
+            {[2023, 2024, 2025].map((year) => (
+              <button
+                key={year}
+                onClick={() => setSelectedYear(year)}
+                className={`rounded-md px-15 py-5 text-2xl font-medium transition ${
+                  selectedYear === year
+                    ? 'bg-[#003d7a] text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+            >
+              {year}
+            </button>
+          ))}
+        </div>
         </div>
 
         {/* Summary Cards */}
