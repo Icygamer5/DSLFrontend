@@ -1,11 +1,15 @@
 /**
  * Small backend that queries Databricks SQL and exposes JSON APIs.
- * Run from DSLFrontend: node server/databricks-api.js
- * Requires: npm install dotenv express
+ * Run from DSLFrontend: npm run server  (or node server/databricks-api.js)
  * Frontend proxies /api to this server in dev (see vite.config.js).
  */
 
-import 'dotenv/config';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 import express from 'express';
 import cors from 'cors';
 

@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Map from './Map';
 import { Users, DollarSign, Wallet } from 'lucide-react';
-import top_crises from '../data/top_crises.json'; // your JSON file
+import top_crises_static from '../data/top_crises.json';
 
 const YEARS = [2023, 2024, 2025];
 const REGIONS = {
@@ -48,9 +48,6 @@ function getTop5Underfunded(data) {
   return result;
 }
 
-// This will be used directly in your CrisisDashboard component
-const TOP_CRISES = getTop5Underfunded(top_crises);
-
 // Summary cards
 const SUMMARY_CARDS = [
   { label: 'Total People in Need', value: '75,400,000', icon: Users },
@@ -60,7 +57,18 @@ const SUMMARY_CARDS = [
 
 export default function CrisisDashboard({ data }) {
   const [selectedYear, setSelectedYear] = useState(2023);
-  const currentCrises = TOP_CRISES[selectedYear];
+  const [topCrisesData, setTopCrisesData] = useState(top_crises_static);
+
+  // Prefer Databricks API when the server is running; fallback to static JSON
+  useEffect(() => {
+    fetch('/api/top_crises')
+      .then((res) => (res.ok ? res.json() : Promise.reject(res)))
+      .then((rows) => setTopCrisesData(Array.isArray(rows) ? rows : top_crises_static))
+      .catch(() => { /* keep static data */ });
+  }, []);
+
+  const topCrises = getTop5Underfunded(topCrisesData);
+  const currentCrises = topCrises[selectedYear] || [];
 
   return (
     <div className="flex h-screen flex-col bg-slate-100 text-slate-800">
