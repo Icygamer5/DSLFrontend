@@ -237,10 +237,10 @@ export default function CrisisDashboard({ data }) {
                 </h3>
 
                 <div className="space-y-2 text-medium text-slate-700">
-                  <p><strong>People in Need:</strong> {queriedCrisisData[selectedCrisis.name + selectedYear]?.people_in_need || 'N/A'}</p>
-                  <p><strong>People Targeted:</strong> {queriedCrisisData[selectedCrisis.name + selectedYear]?.people_targeted || 'N/A'}</p>
-                  <p><strong>Requirements:</strong> ${queriedCrisisData[selectedCrisis.name + selectedYear]?.requirements || 0}</p>
-                  <p><strong>Funding:</strong> ${queriedCrisisData[selectedCrisis.name + selectedYear]?.funding || 0}</p>
+                  <p><strong>People in Need:</strong> {(queriedCrisisData[selectedCrisis.name + selectedYear]?.people_in_need || 'N/A').toLocaleString()}</p>
+                  <p><strong>People Targeted:</strong> {(queriedCrisisData[selectedCrisis.name + selectedYear]?.people_targeted || 'N/A').toLocaleString()}</p>
+                  <p><strong>Requirements:</strong> ${(queriedCrisisData[selectedCrisis.name + selectedYear]?.requirements || 'N/A').toLocaleString()}</p>
+                  <p><strong>Funding:</strong> ${(queriedCrisisData[selectedCrisis.name + selectedYear]?.funding || 'N/A').toLocaleString()}</p>
                   <p><strong>Response Plans:</strong></p>
                   <ul className="list-disc list-inside">
                     {queriedCrisisData[selectedCrisis.name + selectedYear]?.plans?.map((plan, index) => (
