@@ -39,7 +39,6 @@ export default function Map({ data, mapStyle = 'mapbox://styles/mapbox/light-v11
         data: crisisCountries,
       });
 
-      // Fill by pre-calculated severity color
       map.current.addLayer({
         id: 'country-fill',
         type: 'fill',
@@ -50,7 +49,6 @@ export default function Map({ data, mapStyle = 'mapbox://styles/mapbox/light-v11
         },
       });
 
-      // Outline so borders stand out
       map.current.addLayer({
         id: 'country-outline',
         type: 'line',

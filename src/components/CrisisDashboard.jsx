@@ -48,27 +48,37 @@ function getTop5Underfunded(data) {
   return result;
 }
 
-// Summary cards
-const SUMMARY_CARDS = [
-  { label: 'Total People in Need', value: '75,400,000', icon: Users },
-  { label: 'Total Funding Received', value: '$2,350,000,000', icon: DollarSign },
-  { label: 'Average Funding Per Person', value: '$31.20', icon: Wallet },
-];
+function getSummaryEachYear(data) {
+  const result = {};
+  YEARS.forEach((year) => {
+    const yearData = data.filter((d) => d.year === year);
+    const total_people_in_need = yearData.reduce((sum, d) => sum + (d.people_in_need || 0), 0);
+    const total_funding = yearData.reduce((sum, d) => sum + (d.funding || 0), 0);
+    const average_funding_per_person = total_people_in_need ? total_funding / total_people_in_need : 0;
+    result[year] = { total_people_in_need, total_funding, average_funding_per_person };
+  });
+  return result;
+}
 
 export default function CrisisDashboard({ data }) {
-  const [selectedYear, setSelectedYear] = useState(2023);
+  const [selectedYear, setSelectedYear] = useState(2025);
   const [topCrisesData, setTopCrisesData] = useState(top_crises_static);
 
-  // Prefer Databricks API when the server is running; fallback to static JSON
   useEffect(() => {
     fetch('/api/top_crises')
       .then((res) => (res.ok ? res.json() : Promise.reject(res)))
       .then((rows) => setTopCrisesData(Array.isArray(rows) ? rows : top_crises_static))
-      .catch(() => { /* keep static data */ });
+      .catch(() => {});
   }, []);
 
   const topCrises = getTop5Underfunded(topCrisesData);
   const currentCrises = topCrises[selectedYear] || [];
+  const yearSummary = getSummaryEachYear(topCrisesData)[selectedYear];
+  const SUMMARY_CARDS = [
+    { label: 'Total People in Need', value: `${yearSummary?.total_people_in_need?.toLocaleString() ?? 0}`, icon: Users },
+    { label: 'Total Funding Received', value: `$${(yearSummary?.total_funding ?? 0).toLocaleString()}`, icon: DollarSign },
+    { label: 'Average Funding Per Person', value: `$${(yearSummary?.average_funding_per_person ?? 0).toFixed(2)}`, icon: Wallet },
+  ];
 
   return (
     <div className="flex h-screen flex-col bg-slate-100 text-slate-800">
@@ -88,6 +98,21 @@ export default function CrisisDashboard({ data }) {
               Identifying the Most Underfunded Crises
             </p>
           </div>
+          <div className="mt-2 flex justify-end gap-2">
+            {[2023, 2024, 2025].map((year) => (
+              <button
+                key={year}
+                onClick={() => setSelectedYear(year)}
+                className={`rounded-md px-15 py-5 text-2xl font-medium transition ${
+                  selectedYear === year
+                    ? 'bg-[#003d7a] text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+            >
+              {year}
+            </button>
+          ))}
+        </div>
         </div>
 
         {/* Summary Cards */}
