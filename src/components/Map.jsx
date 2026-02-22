@@ -37,32 +37,6 @@ export default function Map({ data, mapStyle = 'mapbox://styles/mapbox/light-v11
         type: 'vector',
         url: 'mapbox://mapbox.country-boundaries-v1',
       });
-
-      // Fill layer: only Sudan (ISO 3166-1 alpha-3 = SDN)
-      map.current.addLayer({
-        id: 'country-highlight',
-        type: 'fill',
-        source: 'mapbox-countries',
-        'source-layer': 'country_boundaries',
-        paint: {
-          'fill-color': '#008CFF', // UN Blue
-          'fill-opacity': 0.6,
-        },
-        filter: ['==', ['get', 'iso_3166_1_alpha_3'], 'SDN'],
-      });
-
-      // Outline layer so the border stands out
-      map.current.addLayer({
-        id: 'country-outline',
-        type: 'line',
-        source: 'mapbox-countries',
-        'source-layer': 'country_boundaries',
-        paint: {
-          'line-color': '#0055aa',
-          'line-width': 2,
-        },
-        filter: ['==', ['get', 'iso_3166_1_alpha_3'], 'SDN'],
-      });
     });
 
     return () => {
