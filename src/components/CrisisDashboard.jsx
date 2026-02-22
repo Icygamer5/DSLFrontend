@@ -83,15 +83,15 @@ export default function CrisisDashboard({ data }) {
   return (
     <div className="flex h-screen flex-col bg-slate-100 text-slate-800">
       {/* Header */}
-      <header className="dashboard-header-bg shrink-0 rounded-b-2xl px-6 pb-5 pt-5 shadow-xl">
+      <header className="dashboard-header-bg shrink-0 rounded-b-xl px-6 py-3 shadow-lg">
         <div className="flex items-center gap-5">
           <img
             src="/un-logo.png"
             alt="United Nations"
-            className="h-16 w-16 shrink-0 object-contain drop-shadow-md md:h-20"
+            className="h-12 w-12 shrink-0 object-contain drop-shadow-md md:h-14"
           />
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white md:text-3xl">
+            <h1 className="text-xl font-bold tracking-tight text-white md:text-2xl">
               Crisis Funding Dashboard
             </h1>
             <p className="mt-0.5 text-sm font-medium text-white/90">
@@ -103,7 +103,7 @@ export default function CrisisDashboard({ data }) {
               <button
                 key={year}
                 onClick={() => setSelectedYear(year)}
-                className={`rounded-md px-15 py-5 text-2xl font-medium transition ${
+                className={`rounded-md px-12 py-4 text-xl font-medium transition ${
                   selectedYear === year
                     ? 'bg-[#003d7a] text-white'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -116,13 +116,13 @@ export default function CrisisDashboard({ data }) {
         </div>
 
         {/* Summary Cards */}
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
           {SUMMARY_CARDS.map((card) => {
             const Icon = card.icon;
             return (
               <div
                 key={card.label}
-                className="flex items-start gap-4 rounded-xl border border-slate-200/60 bg-white/95 p-4 shadow-md"
+                className="flex items-start gap-4 rounded-xl border border-slate-200/60 bg-white/95 p-3 shadow-md"
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#0d3a6e] text-white">
                   <Icon className="h-5 w-5" strokeWidth={2} />
