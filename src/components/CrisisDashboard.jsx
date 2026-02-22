@@ -1,14 +1,57 @@
+import { useState } from 'react';
 import Map from './Map';
 import { Users, DollarSign, Wallet } from 'lucide-react';
+import top_crises from '../data/top_crises.json'; // your JSON file
 
-const TOP_CRISES = [
-  { rank: 1, name: 'Burkina Faso', region: 'Sahel', fundingGap: '87%' },
-  { rank: 2, name: 'Myanmar', region: 'Southeast Asia', fundingGap: '76%' },
-  { rank: 3, name: 'Haiti', region: 'Caribbean', fundingGap: '72%' },
-  { rank: 4, name: 'Venezuela', region: 'South America', fundingGap: '68%' },
-  { rank: 5, name: 'Afghanistan', region: 'South Asia', fundingGap: '64%' },
-];
+const YEARS = [2023, 2024, 2025];
+const REGIONS = {
+  'Afghanistan': 'Asia',
+  'Syria': 'Middle East',
+  'Yemen': 'Middle East',
+  'South Sudan': 'Africa',
+  'Venezuela': 'South America',
+  'Honduras': 'Central America',
+  'Guatemala': 'Central America',
+  'El Salvador': 'Central America',
+  'Mali': 'Africa',
+  'Burundi': 'Africa',
+  'Philippines': 'Asia',
+  'Zambia': 'Africa',
+  'Ethiopia': 'Africa',
+  'Viet Nam': 'Asia',
+  'Zimbabwe': 'Africa',
+  'Malawi': 'Africa',
+  // Add more countries and their regions as needed
+};
 
+function getTop5Underfunded(data) {
+  const result = {};
+
+  YEARS.forEach((year) => {
+    // filter for the year
+    const yearData = data.filter((d) => d.year === year);
+
+    // sort ascending by coverage_ratio (lowest coverage first)
+    yearData.sort((a, b) => a.coverage_ratio - b.coverage_ratio);
+
+    // take top 5
+    const top5 = yearData.slice(0, 5).map((d, i) => ({
+      rank: i + 1,
+      name: d.country,
+      region: REGIONS[d.country] || 'Unknown',
+      fundingGap: `${((1 - d.coverage_ratio) * 100).toFixed(0)}%`, // 100*(1-coverage_ratio)
+    }));
+
+    result[year] = top5;
+  });
+
+  return result;
+}
+
+// This will be used directly in your CrisisDashboard component
+const TOP_CRISES = getTop5Underfunded(top_crises);
+
+// Summary cards
 const SUMMARY_CARDS = [
   { label: 'Total People in Need', value: '75,400,000', icon: Users },
   { label: 'Total Funding Received', value: '$2,350,000,000', icon: DollarSign },
@@ -16,9 +59,12 @@ const SUMMARY_CARDS = [
 ];
 
 export default function CrisisDashboard({ data }) {
+  const [selectedYear, setSelectedYear] = useState(2023);
+  const currentCrises = TOP_CRISES[selectedYear];
+
   return (
     <div className="flex h-screen flex-col bg-slate-100 text-slate-800">
-      {/* Header: textured blue with UN image, title, subtitle, and stat cards */}
+      {/* Header */}
       <header className="dashboard-header-bg shrink-0 rounded-b-2xl px-6 pb-5 pt-5 shadow-xl">
         <div className="flex items-center gap-5">
           <img
@@ -35,6 +81,8 @@ export default function CrisisDashboard({ data }) {
             </p>
           </div>
         </div>
+
+        {/* Summary Cards */}
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
           {SUMMARY_CARDS.map((card) => {
             const Icon = card.icon;
@@ -56,16 +104,36 @@ export default function CrisisDashboard({ data }) {
         </div>
       </header>
 
+      {/* Sidebar + Main */}
       <div className="flex min-h-0 flex-1">
+        {/* Sidebar */}
         <aside className="flex w-72 shrink-0 flex-col border-r border-slate-200 bg-white">
           <div className="border-b border-slate-100 px-4 py-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
-              Top 5 Overlooked Crises
+              Top 5 Underfunded Locations
             </h2>
+
+            {/* Year selector */}
+            <div className="mt-2 flex gap-2">
+              {[2023, 2024, 2025].map((year) => (
+                <button
+                  key={year}
+                  onClick={() => setSelectedYear(year)}
+                  className={`rounded-md px-2 py-1 text-xs font-medium transition ${
+                    selectedYear === year
+                      ? 'bg-[#003d7a] text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {year}
+                </button>
+              ))}
+            </div>
           </div>
+
           <nav className="flex-1 overflow-y-auto p-3">
             <ul className="space-y-1">
-              {TOP_CRISES.map((crisis) => (
+              {currentCrises.map((crisis) => (
                 <li key={crisis.rank}>
                   <div className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5 transition-colors hover:bg-slate-100/80">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#003d7a] text-xs font-medium text-white">
@@ -86,7 +154,8 @@ export default function CrisisDashboard({ data }) {
           </nav>
         </aside>
 
-        <main className="relative min-w-0 flex-1 flex flex-col">
+        {/* Main Map */}
+        <main className="relative min-w-0 flex flex-col flex-1">
           <div className="shrink-0 rounded-b-lg bg-gradient-to-b from-slate-700/90 to-slate-800/95 px-4 py-2.5">
             <h3 className="text-sm font-semibold text-white">Global Crisis Hotspots</h3>
           </div>
