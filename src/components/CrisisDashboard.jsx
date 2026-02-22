@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import Map from './Map';
-import { Users, DollarSign, Wallet } from 'lucide-react';
+import GenieAsk from './GenieAsk';
+import CountryDetailPanel from './CountryDetailPanel';
+import { Users, DollarSign, Wallet, MapPin, BarChart3, Sparkles, X } from 'lucide-react';
 import top_crises_static from '../data/top_crises.json';
-import { plugin } from 'postcss';
 
+const LAKEVIEW_EMBED_URL = 'https://dbc-20724627-a496.cloud.databricks.com/embed/dashboardsv3/01f10fd0a0b913319891b8f689a258d2?o=7474655950071744';
 const YEARS = [2023, 2024, 2025];
 const REGIONS = {
   'Afghanistan': 'Asia',
@@ -25,6 +27,25 @@ const REGIONS = {
   // Add more countries and their regions as needed
 };
 
+// Normalize row from API (Databricks/Genie may return different casing or names)
+function normalizeTopCrisesRow(row) {
+  if (!row || typeof row !== 'object') return row;
+  const r = {};
+  for (const k of Object.keys(row)) r[k.toLowerCase()] = row[k];
+  return {
+    ...row,
+    country: r.country ?? r.country_name ?? r.name ?? row.country,
+    year: r.year ?? row.year,
+    coverage_ratio: r.coverage_ratio != null ? Number(r.coverage_ratio) : row.coverage_ratio,
+    people_in_need: r.people_in_need ?? r.total_people_in_need ?? row.people_in_need ?? 0,
+    people_targeted: r.people_targeted ?? row.people_targeted ?? 0,
+    requirements: r.requirements ?? row.requirements ?? 0,
+    funding: r.funding ?? row.funding ?? 0,
+    funding_gap: r.funding_gap != null ? Math.abs(Number(r.funding_gap)) : row.funding_gap,
+    plans: r.plans ?? row.plans,
+  };
+}
+
 function buildCrisisLookup(data) {
   const result = {};
 
@@ -36,7 +57,7 @@ function buildCrisisLookup(data) {
       people_targeted: d.people_targeted || 0,
       requirements: d.requirements || 0,
       funding: d.funding || 0,
-      plans: d.plans ? JSON.parse(d.plans) : [],
+      plans: d.plans ? (typeof d.plans === 'string' ? JSON.parse(d.plans) : d.plans) : [],
     };
   });
 
@@ -49,20 +70,21 @@ function getTop5Underfunded(data) {
   const result = {};
 
   YEARS.forEach((year) => {
-    // filter for the year
-    const yearData = data.filter((d) => d.year === year);
-
-    // sort ascending by coverage_ratio (lowest coverage first)
-    yearData.sort((a, b) => a.coverage_ratio - b.coverage_ratio);
-
-    // take top 5
+    const yearData = data.filter((d) => Number(d.year) === year);
+    const hasCoverage = yearData.some((d) => d.coverage_ratio != null);
+    if (hasCoverage) {
+      yearData.sort((a, b) => (a.coverage_ratio ?? 1) - (b.coverage_ratio ?? 1));
+    } else {
+      yearData.sort((a, b) => (b.funding_gap ?? 0) - (a.funding_gap ?? 0));
+    }
     const top5 = yearData.slice(0, 5).map((d, i) => ({
       rank: i + 1,
-      name: d.country,
+      name: d.country || 'Unknown',
       region: REGIONS[d.country] || 'Unknown',
-      fundingGap: `${((1 - d.coverage_ratio) * 100).toFixed(0)}%`, // 100*(1-coverage_ratio)
+      fundingGap: d.coverage_ratio != null
+        ? `${((1 - d.coverage_ratio) * 100).toFixed(0)}%`
+        : (d.funding_gap != null ? `$${(d.funding_gap / 1e6).toFixed(0)}M` : '—'),
     }));
-
     result[year] = top5;
   });
 
@@ -72,9 +94,9 @@ function getTop5Underfunded(data) {
 function getSummaryEachYear(data) {
   const result = {};
   YEARS.forEach((year) => {
-    const yearData = data.filter((d) => d.year === year);
-    const total_people_in_need = yearData.reduce((sum, d) => sum + (d.people_in_need || 0), 0);
-    const total_funding = yearData.reduce((sum, d) => sum + (d.funding || 0), 0);
+    const yearData = data.filter((d) => Number(d.year) === year);
+    const total_people_in_need = yearData.reduce((sum, d) => sum + (Number(d.people_in_need) || 0), 0);
+    const total_funding = yearData.reduce((sum, d) => sum + (Number(d.funding) || 0), 0);
     const average_funding_per_person = total_people_in_need ? total_funding / total_people_in_need : 0;
     result[year] = { total_people_in_need, total_funding, average_funding_per_person };
   });
@@ -88,7 +110,18 @@ export default function CrisisDashboard({ data }) {
   useEffect(() => {
     fetch('/api/top_crises')
       .then((res) => (res.ok ? res.json() : Promise.reject(res)))
-      .then((rows) => setTopCrisesData(Array.isArray(rows) ? rows : top_crises_static))
+      .then((rows) => {
+        const list = Array.isArray(rows) ? rows.map(normalizeTopCrisesRow) : [];
+        const hasValidData =
+          list.length > 0 &&
+          list.some(
+            (r) =>
+              (Number(r.people_in_need) || 0) > 0 ||
+              (Number(r.funding) || 0) > 0 ||
+              (Number(r.requirements) || 0) > 0
+          );
+        if (hasValidData) setTopCrisesData(list);
+      })
       .catch(() => {});
   }, []);
 
@@ -102,6 +135,9 @@ export default function CrisisDashboard({ data }) {
   ];
 
   const [selectedCrisis, setSelectedCrisis] = useState(null);
+  const [selectedMapCountry, setSelectedMapCountry] = useState(null);
+  const [mainView, setMainView] = useState('map'); // 'map' | 'charts'
+  const [geniePopupOpen, setGeniePopupOpen] = useState(false);
 
   return (
     <div className="flex h-screen flex-col bg-slate-100 text-slate-800">
@@ -246,14 +282,90 @@ export default function CrisisDashboard({ data }) {
           </nav>
         </aside>
 
-        {/* Main Map */}
+        {/* Main: Map or embedded Lakeview charts */}
         <main className="relative min-w-0 flex flex-col flex-1">
           <div className="shrink-0 rounded-b-lg bg-gradient-to-b from-slate-700/90 to-slate-800/95 px-4 py-2.5">
-            <h3 className="text-sm font-semibold text-white">Global Crisis Hotspots 2025</h3>
+            <div className="flex items-center justify-between gap-4">
+              <h3 className="text-sm font-semibold text-white">
+                {mainView === 'map' ? 'Global Crisis Hotspots 2025 — click a country for details' : 'Crisis dashboard charts'}
+              </h3>
+              <div className="flex rounded-md bg-white/10 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setMainView('map')}
+                  className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium transition ${mainView === 'map' ? 'bg-white/20 text-white' : 'text-white/80 hover:text-white'}`}
+                >
+                  <MapPin className="h-3.5 w-3.5" />
+                  Map
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMainView('charts')}
+                  className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium transition ${mainView === 'charts' ? 'bg-white/20 text-white' : 'text-white/80 hover:text-white'}`}
+                >
+                  <BarChart3 className="h-3.5 w-3.5" />
+                  Charts
+                </button>
+              </div>
+            </div>
           </div>
-          <div className="relative min-h-0 flex-1 bg-space-stars">
-            <Map data={data} mapStyle="mapbox://styles/mapbox/dark-v11" projection="globe" />
-          </div>
+          {mainView === 'map' && (
+            <>
+              <div className="relative min-h-0 flex-1 bg-space-stars">
+                <Map
+                  data={data}
+                  mapStyle="mapbox://styles/mapbox/dark-v11"
+                  projection="globe"
+                  onCountryClick={setSelectedMapCountry}
+                />
+                <CountryDetailPanel
+                  countryProps={selectedMapCountry}
+                  liveData={topCrisesData}
+                  onClose={() => setSelectedMapCountry(null)}
+                />
+                {/* Single Ask Genie button: opens pop-up on the site (no Databricks) */}
+                <button
+                  type="button"
+                  onClick={() => setGeniePopupOpen(true)}
+                  className="absolute bottom-6 right-6 z-10 flex items-center gap-2 rounded-xl border-2 border-violet-400/60 bg-gradient-to-br from-indigo-200 via-pink-200 to-orange-300 px-4 py-3 text-sm font-semibold text-slate-800 shadow-lg transition hover:scale-105 hover:shadow-xl"
+                >
+                  <Sparkles className="h-5 w-5 text-pink-500" />
+                  Ask Genie
+                </button>
+              </div>
+            </>
+          )}
+          {mainView === 'charts' && (
+            <div className="relative min-h-0 flex-1 bg-slate-100">
+              <iframe
+                src={LAKEVIEW_EMBED_URL}
+                title="Crisis funding dashboard charts"
+                className="h-full w-full border-0"
+                style={{ minHeight: 600 }}
+              />
+            </div>
+          )}
+          {/* Pop-up only on Map: in-app Genie, no Databricks */}
+          {geniePopupOpen && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/30 p-4">
+              <div className="relative w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                  <span className="text-sm font-semibold text-slate-800">Ask Genie</span>
+                  <button
+                    type="button"
+                    onClick={() => setGeniePopupOpen(false)}
+                    className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <div className="max-h-[70vh] overflow-y-auto p-4">
+                  <GenieAsk />
+                </div>
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>

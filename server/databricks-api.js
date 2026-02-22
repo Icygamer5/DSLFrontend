@@ -242,6 +242,104 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+// Genie: proxy so frontend can ask Genie (uses funding_gap, total_people_in_need from your space)
+const GENIE_SPACE_ID = process.env.GENIE_SPACE_ID || '';
+async function genieFetch(path, opts = {}) {
+  const url = `https://${HOST}${path}`;
+  const res = await fetch(url, {
+    ...opts,
+    headers: {
+      Authorization: `Bearer ${PAT}`,
+      'Content-Type': 'application/json',
+      ...opts.headers,
+    },
+    body: opts.body !== undefined ? opts.body : undefined,
+  });
+  if (!res.ok) throw new Error(`Genie ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+app.post('/api/genie/ask', async (req, res) => {
+  dotenv.config({ path: path.join(__dirname, '..', '.env') });
+  const spaceId = process.env.GENIE_SPACE_ID || '';
+  if (!spaceId || !PAT || !HOST) {
+    return res.status(502).json({ error: 'Genie not configured. Set GENIE_SPACE_ID, DATABRICKS_PAT, DATABRICKS_SERVER_HOSTNAME in .env' });
+  }
+  const prompt = req.body?.prompt || req.body?.message || '';
+  if (!prompt.trim()) {
+    return res.status(400).json({ error: 'Send { "prompt": "e.g. Funding gap by country" }' });
+  }
+  try {
+    const startRes = await genieFetch(`/api/2.0/genie/spaces/${spaceId}/start-conversation`, {
+      method: 'POST',
+      body: JSON.stringify({ content: prompt }),
+    });
+    const conversationId = startRes.conversation_id || startRes.id;
+    const messageId = startRes.message_id || (startRes.message && startRes.message.message_id);
+    if (!conversationId) throw new Error('No conversation_id from Genie start-conversation');
+
+    let status = startRes.status || 'RUNNING';
+    let result = startRes;
+    const maxPolls = 60;
+    for (let i = 0; i < maxPolls && status !== 'COMPLETED' && status !== 'FAILED' && status !== 'CANCELLED'; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      if (messageId) {
+        result = await genieFetch(
+          `/api/2.0/genie/spaces/${spaceId}/conversations/${conversationId}/messages/${messageId}`
+        );
+      } else {
+        const listRes = await genieFetch(
+          `/api/2.0/genie/spaces/${spaceId}/conversations/${conversationId}/messages`
+        );
+        const messages = listRes.messages || listRes.results || [];
+        result = messages[messages.length - 1] || result;
+      }
+      status = result.status;
+    }
+
+    if (result.error) {
+      return res.status(500).json({ error: result.error.message || result.error, result });
+    }
+
+    // Data delivery: Genie returns query results in a separate endpoint. Fetch so the frontend gets data_array.
+    const msgId = result.message_id || result.id;
+    const attachments = result.attachments || [];
+    for (const att of attachments) {
+      const attId = att.attachment_id ?? att.id;
+      if (!attId) continue;
+      try {
+        const qRes = await genieFetch(
+          `/api/2.0/genie/spaces/${spaceId}/conversations/${conversationId}/messages/${msgId}/attachments/${attId}/query-result`
+        );
+        const stmt = qRes.statement_response || qRes;
+        const manifest = stmt.manifest || {};
+        const resResult = stmt.result || {};
+        const dataArray = resResult.data_array || [];
+        const schema = manifest.schema || {};
+        const columns = schema.columns || [];
+        const columnNames = columns.map((c) => (typeof c === 'object' && c && c.name != null ? c.name : c)).filter(Boolean);
+        if (dataArray.length && columnNames.length) {
+          const rows = dataArray.map((row) => {
+            const obj = {};
+            columnNames.forEach((col, idx) => { obj[col] = row[idx]; });
+            return obj;
+          });
+          result.data_array = rows;
+          result.attachments = [{ ...att, data_array: rows, schema_columns: columnNames }];
+          break;
+        }
+      } catch (err) {
+        if (process.env.NODE_ENV !== 'production') console.warn('Genie attachment query-result:', err.message);
+      }
+    }
+
+    res.json(result);
+  } catch (e) {
+    console.error(e);
+    res.status(502).json({ error: e.message });
+  }
+});
+
 const helpHtml = `
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>API server</title></head>
@@ -249,7 +347,7 @@ const helpHtml = `
   <h1>Databricks API server</h1>
   <p>This port is for the <strong>API only</strong>. Open the dashboard here:</p>
   <p><a href="http://localhost:5173">http://localhost:5173</a> &nbsp; (or <a href="http://localhost:5174">5174</a> if 5173 is in use)</p>
-  <p>API: <code>GET /api/health</code> &nbsp; <code>GET /api/top_crises</code></p>
+  <p>API: <code>GET /api/health</code> &nbsp; <code>GET /api/top_crises</code> &nbsp; <code>POST /api/genie/ask</code></p>
 </body></html>`;
 
 // Catch-all: any other path shows the same message (no more "Cannot GET")
@@ -261,5 +359,6 @@ app.use((req, res) => {
 app.listen(PORT, () => {
   console.log(`Databricks API server at http://localhost:${PORT}`);
   console.log(`  GET /api/top_crises  -> query table: ${TOP_CRISES_TABLE}`);
-  console.log(`  POST /api/chat       -> natural language -> SQL on gold_crisis_impact`);
+  console.log(`  POST /api/chat       -> natural language -> SQL`);
+  if (GENIE_SPACE_ID) console.log(`  POST /api/genie/ask  -> Genie (funding_gap, total_people_in_need)`);
 });
